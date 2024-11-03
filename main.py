@@ -12,11 +12,11 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # MySQL database connection setup
 db_config = {
-    'host': 'mysql-f004c1b-project-cc95.h.aivencloud.com',
-    'port': '17360',
-    'user': 'avnadmin',
-    'password': 'AVNS_YKAVwTtbibetCdirh3B',
-    'database': 'hello12345678910'
+    'host': 'host',
+    'port': 'port',
+    'user': 'user',
+    'password': 'pswd',
+    'database': 'db'
 }
 
 try:
@@ -465,7 +465,7 @@ async def sql(ctx, *, query: str):
         await ctx.send(embed=error_embed)
 
 # Run the bot
-bot_token = 'MTMwMjQ5NzYwNjkwMzI2NzMyOA.GgXP7v.LeLz-A55T6-PePZZH3-PocwL8zQDjxbd_U02bA'
+bot_token = ''
 if bot_token:
     bot.run(bot_token)
 else:
