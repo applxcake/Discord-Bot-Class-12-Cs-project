@@ -1,29 +1,143 @@
-🎟️ SQL Discord Bot for Database Management 🚀
-Welcome to the SQL Discord Bot – a powerful and easy-to-use bot designed for admins who want to interact with their MySQL database directly from Discord! 💻📊 This bot is packed with commands for running SQL queries, viewing results in styled embeds, and more. Perfect for streamlined server management and database interactions right from your Discord channel! 🌐
+Here’s the updated README for your Discord bot project using MySQL instead of SQLite. You can save it as README.md.
 
-Features ✨
-Execute SQL Queries: Run SELECT, INSERT, UPDATE, DELETE, and more – all from within Discord! 📄
-Beautiful Embeds: SQL query results are formatted in rich, styled embeds for easy reading, with custom emojis and fields for organized data display. 🖌️
-Admin-Only Access: Restricted to bot owner or specified admins, ensuring safe and controlled access to your database. 🔒
-Status & Credits: Bot shows status activity and credits its creators, keeping the bot experience personalized and polished. 🎨
-Commands 🛠️
-Command	Description
-!sql <query>	Executes a SQL query on your MySQL database and returns results as an embed. Example: !sql SELECT * FROM tickets; 🎟️
-!helpme	Displays a help message with available commands and usage tips. ℹ️
-How It Works 💡
-Database Connection: The bot connects to a MySQL database using environment variables for secure access. 🗄️
-Query Execution: Supports all types of SQL queries, from simple SELECT statements to complex JOINs and data modification commands. 📝
-Response Embeds: Results are formatted with custom emojis and fields, making it easy to navigate through data, especially when working with tables like tickets. 🎉
-Error Handling: Clear, detailed error messages for syntax errors, connection issues, and more, so you know exactly what's happening with your queries! ⚠️
-Getting Started 🚀
-Prerequisites
-Discord API Token: Add your bot token as an environment variable (DISCORD_BOT_TOKEN).
-MySQL Database Access: Ensure you have MySQL connection details ready (host, port, user, password, database name).
+# ✈️ Flight Ticket Booking Discord Bot
 
-Built With ❤️
-Discord.py - Python API wrapper for Discord.
-MySQL Connector - Connector for MySQL databases.
-Contributing 🤝
-Contributions are welcome! Fork the repository, create a new branch, and submit a pull request with your improvements.
+Welcome to the **Flight Ticket Booking Discord Bot** project! This bot simulates a flight ticket booking system within Discord, providing users with a fun and interactive experience. **Disclaimer**: This bot is purely for educational and entertainment purposes and is not associated with any real-life booking service.
 
-Enjoy your seamless SQL experience right from Discord! 🎉👨‍💻👩‍💻
+---
+
+## 📋 Table of Contents
+- [Introduction](#-introduction)
+- [Features](#-features)
+- [Setup](#-setup)
+- [Commands](#-commands)
+- [Tech Stack](#-tech-stack)
+- [Contributing](#-contributing)
+- [License](#-license)
+- [Code of Conduct](#-code-of-conduct)
+
+---
+
+## 💡 Introduction
+
+Created by **Bala Adithya** and **Sri Ram Charan**, this project is a **CS project** for learning and showcasing our coding skills. This Discord bot uses **Python** and **MySQL** to create a simulated booking experience where users can:
+- Book tickets
+- Lookup flight details
+- Cancel tickets
+- Get support on various issues
+
+This bot is a fun tool to engage users and can be used as a project in various CS-related curricula.
+
+> **Disclaimer**: This bot is a fictional project and not intended for real-life ticket booking. It does not guarantee any real-world bookings or reservations.
+
+---
+
+## ✨ Features
+
+- **Interactive Ticket Booking**: Users can purchase and manage tickets within Discord.
+- **Database Integration**: All bookings are saved to a MySQL database, providing a persistent record.
+- **User Support**: Users can ask questions and get assistance with their fictional bookings.
+- **Inquiries**: Check flight status, delays, and terminal information.
+- **Modern UI**: Uses rich embeds and interactive buttons for a sleek look.
+
+---
+
+## ⚙️ Setup
+
+To run this bot locally, follow these steps:
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-repo/flight-booking-bot.git
+   cd flight-booking-bot
+
+2. Install dependencies:
+
+pip install discord.py mysql-connector-python
+
+
+3. Setup MySQL Database:
+
+Install MySQL on your system if you haven't already.
+
+Create a database called flight_booking and a table for bookings with the necessary fields. Here’s an example SQL command to create a basic table:
+
+CREATE TABLE tickets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    flight_number VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL
+);
+
+
+
+4. Configure Database Connection: Update your database connection details in the code where MySQL connection is established.
+
+
+5. Run the bot:
+
+python bot.py
+
+
+
+> Ensure you have a Discord bot set up and have its token ready to insert in the code. You can create a bot at the Discord Developer Portal.
+
+## 🛠️ Tech Stack
+
+Python: Main programming language for bot functionality.
+
+MySQL: Database for storing and managing ticket data.
+
+Discord API: For interaction within the Discord platform.
+
+
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions from the community to enhance this project!
+
+1. Fork the repository and create your branch: git checkout -b feature/AmazingFeature
+
+
+2. Commit your changes: git commit -m 'Add some AmazingFeature'
+
+
+3. Push to the branch: git push origin feature/AmazingFeature
+
+
+4. Open a pull request
+
+
+
+Please read our Code of Conduct before contributing.
+
+
+---
+
+## ⚠️ Disclaimer
+
+This bot is strictly for educational purposes and should be used solely as a CS project or fun Discord bot. It is not a real booking service and does not guarantee any real-life ticket reservations or support. All interactions and data are simulated.
+
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License. For more details, see the LICENSE file.
+
+
+---
+
+## 📜 Code of Conduct
+
+We have adopted a Code of Conduct for this project. All contributors are expected to uphold this code to create a welcoming and inclusive environment.
+
+
+---
+
+# > Built by Bala Aditya 
+
+
+
