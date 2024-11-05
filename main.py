@@ -5,6 +5,7 @@ import random
 import string
 import os
 import asyncio
+from discord.ui import Modal, TextInput
 
 # Discord bot setup with necessary intents
 intents = discord.Intents.default()
@@ -13,10 +14,10 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # MySQL database connection setup
 db_config = {
-    'host': 'HOST_NAME',
+    'host': 'HOST',
     'port': 'PORT',
-    'user': 'USER_NAME',
-    'password': 'USER_PSWD',
+    'user': 'USERNAME',
+    'password': 'PSWD',
     'database': 'DB_NAME'
 }
 
@@ -58,14 +59,13 @@ FLIGHT_PRICES = {
     "first": 500.00
 }
 
-# Channel IDs
-# Channel IDs
+# Channel IDs for different categories
 channel_ids = {
-    "ticket_purchasing": <purchase channel id>,
-    "inquiry": <inquiry channel id>,
-    "support": <support channel id>,
-    "cancel": <cancel channel id>,
-    "show_table": <show_table channel id>,
+    "ticket_purchasing": <>,
+    "inquiry": <>,
+    "support": <>,
+    "cancel": <>,
+    "show_table": <>,
 }
 
 # Counter for ticket numbering
@@ -313,11 +313,12 @@ async def helpme_command(ctx):
     embed.add_field(name="🔍 !inquiry", value="Check flight information", inline=False)
     embed.add_field(name="🛠️ !support", value="Support for issues like luggage delay or ticket postpone", inline=False)
     embed.add_field(name="❌ !cancel", value="Cancel a booking", inline=False)
-    embed.add_field(name="📋 !show_table", value="Show all booked tickets", inline=False)
+    embed.add_field(name="🎟️ !lookup", value="Check the details of your ticket!", inline=False)
+    embed.add_field(name="📋 !show_table", value="Show all booked tickets ( only for people having the role 'Bruh'", inline=False)
     embed.add_field(name="💬 !purge", value="Deletes Messages (in whole)", inline=False)
     embed.add_field(name="🧮 !calc", value="A basic Calculator for our needs", inline=False)
+    embed.add_field(name="📢 !about", value="Tells about the bot :3", inline=False)
     await ctx.send(embed=embed)
-
 #PURCHASE CMD
 
 @bot.command(name='purchase')
@@ -748,10 +749,71 @@ async def cancel_command(ctx):
         print(f"Error in cancel_command: {e}")
         await ctx.send("⚠️ An error occurred while processing the cancel request. Please try again later.")
 
+#LOOKUP CMD
+# Lookup Modal for gathering ticket information
+class LookupModal(Modal):
+    def __init__(self):
+        super().__init__(title="🎟️ Ticket Lookup")
 
+        # Add text inputs for ticket number and name
+        self.ticket_number = TextInput(label="🎫 Ticket Number", placeholder="Enter your ticket number", required=True)
+        self.name = TextInput(label="👤 Your Name", placeholder="Enter your name", required=True)
+
+        # Add text inputs to the modal
+        self.add_item(self.ticket_number)
+        self.add_item(self.name)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Fetch input values
+        ticket_number = self.ticket_number.value
+        name = self.name.value
+
+        try:
+            # Query the database to check if the ticket and name match
+            query = "SELECT * FROM tickets WHERE ticket_number = %s AND passenger_name = %s"
+            cursor.execute(query, (ticket_number, name))
+            result = cursor.fetchone()  # fetch one matching row or None if not found
+        except mysql.connector.errors.Error as e:
+            await interaction.response.send_message(
+                f"⚠️ Error querying the database: {e}", ephemeral=True
+            )
+            return
+
+        if result:
+            # If match found, format and display ticket details in an embed
+            embed = discord.Embed(title="🎟️ Ticket Details", color=discord.Color.green())
+            embed.add_field(name="🎫 Ticket Number", value=result[0], inline=True)
+            embed.add_field(name="👤 Name", value=result[1], inline=True)
+            embed.add_field(name="📄 Issue", value=result[2], inline=False)
+            embed.add_field(name="🟢 Status", value=result[3], inline=False)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        else:
+            # If no match found, send an error message
+            await interaction.response.send_message(
+                "⚠️ No matching ticket found. Please ensure your ticket number and name are correct.",
+                ephemeral=True
+            )
+
+# Command to open the lookup button
+@bot.command(name="lookup")
+async def lookup(ctx):
+    embed = discord.Embed(
+        title="Ticket Lookup",
+        description="Click the button below to enter your ticket information.",
+        color=discord.Color.blue()
+    )
+    view = View()
+    lookup_button = Button(label="Enter Ticket Info", style=discord.ButtonStyle.primary)
+
+    async def button_callback(interaction: discord.Interaction):
+        # Show the lookup modal when the button is clicked
+        await interaction.response.send_modal(LookupModal())
+
+    lookup_button.callback = button_callback
+    view.add_item(lookup_button)
+
+    await ctx.send(embed=embed, view=view)
 # SQL CMD
-
-
 # Helper function to format results from the "tickets" table
 def format_tickets_embed(headers, rows):
     embed = discord.Embed(
@@ -775,7 +837,6 @@ def format_tickets_embed(headers, rows):
                 ticket_info += f"**{header}:** {value}\n"
         embed.add_field(name="Ticket", value=ticket_info, inline=False)
     return embed
-
 # Helper function to format general SQL query results in an embed
 def format_query_result_embed(headers, rows):
     embed = discord.Embed(
@@ -807,7 +868,6 @@ async def sql(ctx, *, query: str):
         if "from table" in query.lower():
             await ctx.send("⚠️ Error: 'table' is a reserved keyword in SQL. Please specify a valid table name in your query.")
             return
-
         # Execute the query
         cursor.execute(query)
 
@@ -837,7 +897,6 @@ async def sql(ctx, *, query: str):
                 description="Your SQL query was executed and committed.",
                 color=discord.Color.green()
             )
-
         # Send the embed
         await ctx.send(embed=embed)
 
@@ -854,8 +913,6 @@ async def sql(ctx, *, query: str):
         await ctx.send(embed=error_embed)
 
 #EASTER EGGS
-
-
 @bot.command()
 async def calc(ctx, operation: str, num1: float, num2: float):
     """
@@ -881,6 +938,9 @@ async def calc(ctx, operation: str, num1: float, num2: float):
     else:
         await ctx.send("Invalid operation! Please use add, subtract, multiply, or divide.")
 
+
+#nsfw stuff and self boasting
+#nsfw cmd
 @bot.command(name='nig')
 async def joker_gif(ctx):
     await ctx.send(f"I like sri ram and v hemanth oiled up")
@@ -888,7 +948,7 @@ async def joker_gif(ctx):
     # Replace the URL with a direct link to a GIF. You might need to use an actual GIF link here.
     embed.set_image(url="https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExejBtOWVlaW13MWhvZTM4bTJ6MTRvdzdvdGFoZ2U0N29saXA3Y3JjdCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/XCKQMMZWkzs51TEEgz/giphy-downsized-large.gif")
     await ctx.send(embed=embed)
-
+#self boasting cmd
 @bot.command(name='hob')
 async def joker_gif(ctx):
     await ctx.send(f"""Well, let me tell ya ’bout hobt0, one of the finest moderators you’ll find ridin' the virtual plains over on Zeqa Minecraft. This here feller knows them server rules better than a cowboy knows his trusty steed. Folks around the server got a deep respect for hobt0, not just ‘cause they keep order like a true sheriff, but ‘cause they’re fair as a prairie sunrise, always lookin’ out for everyone from the greenest newcomer to the most seasoned players.
@@ -899,7 +959,13 @@ Reckon folks’d say Zeqa Minecraft wouldn't be quite the same without ‘em."""
     embed = discord.Embed(title="🔥")
     embed.set_image(url="https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExY3Fqc2wwaHRuYTRibWp3c2NhMzBnZXVhNm80OTV2YzI5M2o2cGc1MCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/TIcqppfavXjhqxhUVV/giphy.gif")
     await ctx.send(embed=embed)
+#ty cmd
+@bot.command(name='ty')
+async def ty(ctx):
+    """Sends a thank you message."""
+    await ctx.send(f"You're very welcome! I'm glad to assist you.")
 
+#purge cmd
 @bot.command(name="purge")
 @commands.has_permissions(manage_messages=True)
 async def purge(ctx, number: int):
@@ -919,9 +985,28 @@ async def purge(ctx, number: int):
     await asyncio.sleep(10)
     await confirmation_message.delete()
 
+#about cmd
+@bot.command(name="about")
+async def about_command(ctx):
+    # Creating an embed for the bot information
+    embed = discord.Embed(
+        title="📢 About SQL Discord Bot",
+        description="A powerful bot designed to interact with MySQL databases directly from Discord! Perfect for admins. 💻📊",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="Features ✨", value=(
+        "• **Execute SQL Queries:** Run `SELECT`, `INSERT`, `UPDATE`, `DELETE`, etc. from Discord! 📄\n"
+        "• **Rich Embeds:** Display results in rich, readable formats. 🖌️\n"
+        "• **Admin-Only Access:** Restricted to specified admins. 🔒\n"
+        "• **Status & Credits:** Shows bot status and creator credits. 🎨"
+    ), inline=False)
+    embed.add_field(name="👨‍💻 Built By", value="Bala Aditya", inline=False)
+    embed.set_footer(text="Type !helpme to see available commands!")
 
+    await ctx.send(embed=embed)
+    
 # Run the bot
-bot_token = 'BOT_TOKEN'
+bot_token = 'BOT TOKEN'
 if bot_token:
     bot.run(bot_token)
 else:
