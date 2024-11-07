@@ -5,18 +5,26 @@ import random
 import string
 import os
 import asyncio
-from discord.ui import Modal, TextInput
+import pytz
+from discord.ui import Modal, TextInput, Button, View
+from datetime import datetime, timedelta, time
+from discord import app_commands, ui, Interaction
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
+
+
 
 # Discord bot setup with necessary intents
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+geolocator = Nominatim(user_agent="flight_bot")
 
 # MySQL database connection setup
 db_config = {
-    'host': 'HOST',
+    'host': 'HOST_NAME',
     'port': 'PORT',
-    'user': 'USERNAME',
+    'user': 'USER_NAME',
     'password': 'PSWD',
     'database': 'DB_NAME'
 }
@@ -52,20 +60,14 @@ CREATE TABLE IF NOT EXISTS tickets (
 """)
 db.commit()
 
-# Prices for different flight types
-FLIGHT_PRICES = {
-    "economy": 100.00,
-    "business": 250.00,
-    "first": 500.00
-}
 
 # Channel IDs for different categories
 channel_ids = {
-    "ticket_purchasing": <>,
-    "inquiry": <>,
-    "support": <>,
-    "cancel": <>,
-    "show_table": <>,
+    "ticket_purchasing": <id>,
+    "inquiry": <id>,
+    "support": <id>,
+    "cancel": <id>,
+    "show_table": <id>,
 }
 
 # Counter for ticket numbering
@@ -108,10 +110,12 @@ async def initialize_ticket_count(guild):
     # Count channels that match the ticket naming pattern (e.g., ticket#001)
     ticket_count = sum(1 for channel in guild.text_channels if channel.name.startswith(tuple(channel_ids.keys())) and "#" in channel.name and channel.name.split("#")[1].isdigit())
 
+
 # Ticket Purchasing Embed
 @bot.command(name='channel-purchase')
 @commands.is_owner()
 async def ticket_purchasing_command(ctx):
+    """Embeds purchase command in a specific channel."""
     channel = bot.get_channel(channel_ids["ticket_purchasing"])
     if not channel:
         await ctx.send("Ticket Purchasing channel not found.")
@@ -131,7 +135,7 @@ async def ticket_purchasing_command(ctx):
             "✅ Thank you for starting a ticket purchase!\n\n"
             "To begin, use the command `!purchase` in this channel and follow the steps provided. 🎫"
         )
-        new_channel = await create_ticket_channel(ctx.guild, category, "ticket", guide_message, interaction.user)
+        new_channel = await create_ticket_channel(interaction.guild, category, "ticket", guide_message, interaction.user)
         await new_channel.send(f"{interaction.user.mention}, your ticket purchasing support has been created here.")
         await interaction.response.send_message("Your ticket has been created!", ephemeral=True)
 
@@ -144,6 +148,7 @@ async def ticket_purchasing_command(ctx):
 @bot.command(name='channel-inquiry')
 @commands.is_owner()
 async def inquiry_command(ctx):
+    """Embeds inquiry command in a specific channel."""
     channel = bot.get_channel(channel_ids["inquiry"])
     if not channel:
         await ctx.send("Inquiry channel not found.")
@@ -176,6 +181,7 @@ async def inquiry_command(ctx):
 @bot.command(name='channel-support')
 @commands.is_owner()
 async def support_command(ctx):
+    """Embeds support command in a specific channel."""
     channel = bot.get_channel(channel_ids["support"])
     if not channel:
         await ctx.send("Support channel not found.")
@@ -208,6 +214,7 @@ async def support_command(ctx):
 @bot.command(name='channel-cancel')
 @commands.is_owner()
 async def cancel_command(ctx):
+    """Embeds cancel command in a specific channel."""
     channel = bot.get_channel(channel_ids["cancel"])
     if not channel:
         await ctx.send("Cancel channel not found.")
@@ -240,6 +247,7 @@ async def cancel_command(ctx):
 @bot.command(name='channel-show_table')
 @commands.is_owner()
 async def show_table_command(ctx):
+    """Embeds show table list in a specific channel."""
     channel = bot.get_channel(channel_ids["show_table"])
     if not channel:
         await ctx.send("Show Table channel not found.")
@@ -288,22 +296,14 @@ async def show_table_command(ctx):
 
 # RPC
 
-@bot.event
-async def on_ready():
-    # Set rich presence with combined details and state
-    activity = discord.Activity(
-        type=discord.ActivityType.listening, 
-        name="Type !helpme to get started",
-        details="Type !helpme to get started",  # Main activity line
-        state="Made by Bala Aditya"  # Combined small text
-    )
-    await bot.change_presence(activity=activity, status=discord.Status.online)
-    print(f'{bot.user} is online with the rich presence!')
 
 #HELPME CMD
+# Remove the default help command
+bot.remove_command('help')
 
-@bot.command(name='helpme')
-async def helpme_command(ctx):
+@bot.command(name='help')
+async def help_command(ctx):
+    """Lists all the intended commands."""
     embed = discord.Embed(
         title="📋 Help Menu",
         description="Here's a list of available commands:",
@@ -314,34 +314,49 @@ async def helpme_command(ctx):
     embed.add_field(name="🛠️ !support", value="Support for issues like luggage delay or ticket postpone", inline=False)
     embed.add_field(name="❌ !cancel", value="Cancel a booking", inline=False)
     embed.add_field(name="🎟️ !lookup", value="Check the details of your ticket!", inline=False)
-    embed.add_field(name="📋 !show_table", value="Show all booked tickets ( only for people having the role 'Bruh'", inline=False)
+    embed.add_field(name="📋 !show_table", value="Show all booked tickets (only for people having the role 'Bruh')", inline=False)
     embed.add_field(name="💬 !purge", value="Deletes Messages (in whole)", inline=False)
     embed.add_field(name="🧮 !calc", value="A basic Calculator for our needs", inline=False)
     embed.add_field(name="📢 !about", value="Tells about the bot :3", inline=False)
     await ctx.send(embed=embed)
-#PURCHASE CMD
+    
+# Function to generate a random seat number
+def generate_seat_number():
+    row = random.randint(1, 30)  # Example: 30 rows in the plane
+    seat = random.choice("ABCDEF")  # Example: seats labeled A-F
+    return f"{row}{seat}"
 
+    
+#PURCHASE CMD
 @bot.command(name='purchase')
 async def purchase_ticket(ctx):
+    """Purchase command for purchasing flight tickets."""
+
+    # Initial embed for ticket booking
     embed = discord.Embed(
         title="✈️ Flight Ticket Booking",
         description="Click the button below to start the booking process.",
         color=discord.Color.blue()
     )
-    view = discord.ui.View()
+    view = discord.ui.View(timeout=None)
+
+    # Start Booking Button
     start_button = discord.ui.Button(label="Start Booking", style=discord.ButtonStyle.primary)
 
-    async def start_booking_callback(interaction):
-        # Modal to collect initial passenger information
+    async def start_booking_callback(interaction: discord.Interaction):
+
+        # Modal to collect passenger information
         class PassengerInfoModal(discord.ui.Modal, title="Passenger Information"):
             name = discord.ui.TextInput(label="👤 Passenger Name", placeholder="Enter your name")
-            age = discord.ui.TextInput(label="📅 Age", placeholder="Enter your age", style=discord.TextStyle.short)
+            age = discord.ui.TextInput(label="📅 Age", placeholder="Enter your age", min_length=1, max_length=3)
             passport_number = discord.ui.TextInput(label="🛂 Passport Number", placeholder="Enter your passport number")
             departure_country = discord.ui.TextInput(label="🛫 Departure Country", placeholder="Where are you departing from?")
             destination_country = discord.ui.TextInput(label="🛬 Destination Country", placeholder="Where are you going?")
 
-            async def on_submit(self, interaction):
-                # Store collected passenger information
+            async def on_submit(self, interaction: discord.Interaction):
+                await interaction.response.defer()
+
+                # Collect data from modal
                 passenger_data = {
                     "name": self.name.value.upper(),
                     "age": str(self.age.value).upper(),
@@ -350,88 +365,143 @@ async def purchase_ticket(ctx):
                     "destination_country": self.destination_country.value.upper()
                 }
 
-                # Query the database to retrieve the flight number based on departure country
+                # Fetch flight number from database or create a mock entry
                 cursor.execute("SELECT flight_number FROM flight WHERE place = %s", (passenger_data['departure_country'],))
-                flight_result = cursor.fetchone()
-                if flight_result:
-                    flight_number = flight_result[0].upper()  # Retrieve and convert the flight number to uppercase
-                else:
-                    await interaction.response.send_message("⚠️ No flight found for the selected departure country. Please try again.", ephemeral=True)
+                flight_results = cursor.fetchall()
+                flight_number = random.choice([result[0] for result in flight_results]).upper() if flight_results else "FL123"
+
+                # Calculate distance and price using geopy
+                try:
+                    departure_location = geolocator.geocode(passenger_data['departure_country'])
+                    destination_location = geolocator.geocode(passenger_data['destination_country'])
+
+                    if not departure_location or not destination_location:
+                        await interaction.followup.send("⚠️ Could not locate one of the places. Check country names.", ephemeral=True)
+                        return
+
+                    distance_km = geodesic((departure_location.latitude, departure_location.longitude),
+                                           (destination_location.latitude, destination_location.longitude)).km
+                    price = distance_km * 0.1  # Example rate of $0.1 per km
+
+                except Exception as e:
+                    await interaction.followup.send(f"⚠️ Error in location calculation: {e}", ephemeral=True)
                     return
 
-                # Ask for arrival date in a follow-up message
-                await interaction.response.send_message("📅 Please enter your arrival date in the format `YYYY-MM-DD`:")
-
-                # Wait for user's response with the arrival date
-                def check(msg):
-                    return msg.author == ctx.author and msg.channel == ctx.channel
-
-                try:
-                    arrival_msg = await bot.wait_for("message", check=check, timeout=60.0)
-                    passenger_data["arrival_date"] = arrival_msg.content.upper()  # Save and convert arrival date to uppercase
-
-                    # Prompt for flight type selection with buttons
-                    embed = discord.Embed(
-                        title="Select Flight Type",
-                        description="Choose your preferred flight type.",
+                # Prompt for arrival date
+                async def prompt_arrival_date():
+                    arrival_embed = discord.Embed(
+                        title="📅 Arrival Date",
+                        description="Please enter your **arrival date** in the format YYYY-MM-DD (e.g., 2024-11-06).",
                         color=discord.Color.blue()
                     )
-                    view = discord.ui.View()
+                    await ctx.send(embed=arrival_embed)
 
-                    for flight_type, price in FLIGHT_PRICES.items():
-                        button = discord.ui.Button(label=f"{flight_type.capitalize()} - ${price}", style=discord.ButtonStyle.secondary)
+                    def check(msg):
+                        return msg.author == ctx.author and msg.channel == ctx.channel
 
-                        async def flight_type_callback(interaction, flight_type=flight_type, price=price):
-                            ticket_number = generate_ticket_number().upper()  # Convert ticket number to uppercase
+                    try:
+                        while True:
+                            arrival_msg = await bot.wait_for("message", check=check, timeout=60.0)
+                            try:
+                                arrival_date = datetime.strptime(arrival_msg.content, "%Y-%m-%d").date()
+                                today = datetime.today().date()
 
-                            # Insert details into the database
-                            cursor.execute("""
-                                INSERT INTO tickets (ticket_number, passenger_name, age, passport_number, 
-                                                     departure_country, destination_country, flight_type, price, arrival_date)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            """, (ticket_number, passenger_data['name'], passenger_data['age'], passenger_data['passport_number'], 
-                                  passenger_data['departure_country'], passenger_data['destination_country'], flight_type, price,
-                                  passenger_data['arrival_date']))
-                            db.commit()
+                                if arrival_date < today:
+                                    await ctx.send(embed=discord.Embed(
+                                        title="❌ Invalid Date",
+                                        description="The date is in the past! Enter a future date.",
+                                        color=discord.Color.red()
+                                    ))
+                                else:
+                                    passenger_data["arrival_date"] = arrival_date.strftime("%Y-%m-%d").upper()
+                                    return
 
-                            # Confirmation message with uppercase details
-                            confirmation_embed = discord.Embed(
-                                title="Ticket Purchase Confirmation 🎫",
-                                description="Your ticket has been successfully booked!",
-                                color=discord.Color.green()
-                            )
-                            confirmation_embed.add_field(name="👤 Passenger Name", value=passenger_data['name'], inline=False)
-                            confirmation_embed.add_field(name="📅 Age", value=str(passenger_data['age']), inline=False)
-                            confirmation_embed.add_field(name="🛂 Passport Number", value=passenger_data['passport_number'], inline=False)
-                            confirmation_embed.add_field(name="🛫 Departure", value=passenger_data['departure_country'], inline=True)
-                            confirmation_embed.add_field(name="🛬 Destination", value=passenger_data['destination_country'], inline=True)
-                            confirmation_embed.add_field(name="💺 Flight Type", value=flight_type.upper(), inline=False)
-                            confirmation_embed.add_field(name="💵 Price", value=f"${price:.2f}", inline=False)
-                            confirmation_embed.add_field(name="🎟️ Ticket Number", value=ticket_number, inline=False)
-                            confirmation_embed.add_field(name="📅 Arrival Date", value=passenger_data['arrival_date'], inline=False)
-                            confirmation_embed.add_field(name="✈️ Flight Number", value=flight_number, inline=False)  # Include flight number in uppercase
-                            await interaction.response.send_message(embed=confirmation_embed)
+                            except ValueError:
+                                await ctx.send(embed=discord.Embed(
+                                    title="⚠️ Incorrect Format",
+                                    description="The date format is incorrect! Use YYYY-MM-DD.",
+                                    color=discord.Color.orange()
+                                ))
 
-                        button.callback = flight_type_callback
-                        view.add_item(button)
+                    except TimeoutError:
+                        await ctx.send(embed=discord.Embed(
+                            title="⏰ Time Out",
+                            description="You took too long to respond. Please restart the purchase process.",
+                            color=discord.Color.red()
+                        ))
 
-                    await ctx.send(embed=embed, view=view)
+                await prompt_arrival_date()
 
-                except TimeoutError:
-                    await interaction.followup.send("⚠️ You took too long to respond. Please start the purchase process again.", ephemeral=True)
+                # Embed for flight selection
+                embed = discord.Embed(
+                    title="Select Flight Type ✈️",
+                    description="Choose your flight type from the options below.",
+                    color=discord.Color.blue()
+                )
+                view = discord.ui.View()
 
+                # Add flight types
+                flight_types = {"economy": price, "business": price * 1.5, "first": price * 2}
+
+                for flight_type, calculated_price in flight_types.items():
+                    button = discord.ui.Button(label=f"{flight_type.capitalize()} - ${calculated_price:.2f}", style=discord.ButtonStyle.secondary)
+
+                    async def flight_type_callback(interaction, flight_type=flight_type, calculated_price=calculated_price):
+                        ticket_number = generate_ticket_number().upper()
+                        seat_number = generate_seat_number()
+
+                        # Get current time in IST (Indian Standard Time)
+                        ist = pytz.timezone("Asia/Kolkata")
+                        current_time_ist = datetime.now(ist).strftime("%I:%M %p")
+
+                        cursor.execute("""
+                            INSERT INTO tickets (ticket_number, passenger_name, age, passport_number, 
+                                                 departure_country, destination_country, flight_type, 
+                                                 price, arrival_date, flight_number, seat_number, purchase_time)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (ticket_number, passenger_data['name'], passenger_data['age'], passenger_data['passport_number'], 
+                              passenger_data['departure_country'], passenger_data['destination_country'], flight_type, 
+                              calculated_price, passenger_data['arrival_date'], flight_number, seat_number, current_time_ist))
+                        db.commit()
+
+                        confirmation_embed = discord.Embed(
+                            title="Ticket Purchase Confirmation 🎫",
+                            description="Your ticket has been successfully booked! Here are your details:",
+                            color=discord.Color.green()
+                        )
+                        confirmation_embed.add_field(name="👤 Passenger Name", value=passenger_data['name'], inline=False)
+                        confirmation_embed.add_field(name="📅 Age", value=passenger_data['age'], inline=False)
+                        confirmation_embed.add_field(name="🛂 Passport Number", value=passenger_data['passport_number'], inline=False)
+                        confirmation_embed.add_field(name="🛫 Departure", value=passenger_data['departure_country'], inline=True)
+                        confirmation_embed.add_field(name="🛬 Destination", value=passenger_data['destination_country'], inline=True)
+                        confirmation_embed.add_field(name="💺 Flight Type", value=flight_type.upper(), inline=False)
+                        confirmation_embed.add_field(name="💵 Price", value=f"${calculated_price:.2f}", inline=False)
+                        confirmation_embed.add_field(name="🎟️ Ticket Number", value=ticket_number, inline=False)
+                        confirmation_embed.add_field(name="📅 Arrival Date", value=passenger_data['arrival_date'], inline=False)
+                        confirmation_embed.add_field(name="✈️ Flight Number", value=flight_number, inline=False)
+                        confirmation_embed.add_field(name="🪑 Seat Number", value=seat_number, inline=False)
+                        confirmation_embed.add_field(name="🕒 Purchase Time (IST)", value=current_time_ist, inline=False)
+                        await interaction.response.send_message(embed=confirmation_embed)
+
+                    button.callback = flight_type_callback
+                    view.add_item(button)
+
+                await ctx.send(embed=embed, view=view)
+
+        # Show the modal when the button is clicked
         await interaction.response.send_modal(PassengerInfoModal())
 
+    # Attach the callback to the button and add it to the view
     start_button.callback = start_booking_callback
     view.add_item(start_button)
 
+    # Send the initial embed with the view
     await ctx.send(embed=embed, view=view)
-
-
+    
 #INQUIRY CMD
-
 @bot.command(name='inquiry')
 async def inquiry_command(ctx):
+    """Inquiry command."""
     embed = discord.Embed(
         title="🔍 Flight Inquiry",
         description="Select what you'd like to inquire about:",
@@ -508,6 +578,7 @@ async def inquiry_command(ctx):
 
 @bot.command(name='support')
 async def support_command(ctx):
+    """Support command."""
     embed = discord.Embed(
         title="🛠️ Support Options",
         description="Choose an option for assistance with your booking:",
@@ -627,6 +698,7 @@ async def support_command(ctx):
 @bot.command(name='show_table')
 @commands.has_role(1302680610187509793)
 async def show_table_command(ctx):
+    """Shows the "tickets" table from the Database."""
     cursor.execute("SELECT * FROM tickets")
     results = cursor.fetchall()
     if results:
@@ -637,7 +709,7 @@ async def show_table_command(ctx):
         )
 
         for row in results:
-            ticket_number, name, age, passport_number, departure, destination, flight_type, price, arrival_date = row
+            ticket_number, name, age, passport_number, departure, destination, flight_type, price, arrival_date, flight_number, seat_number, purchase_time = row
 
             # Organize ticket information with proper spacing
             ticket_info = (
@@ -652,6 +724,9 @@ async def show_table_command(ctx):
                 f"💵 **Price : **               `${price:.2f}`\n\n"
 
                 f"📅 **Arrival Date : **\n`{arrival_date}`\n"
+                f"✈️ **Flight Number : **\n`{flight_number}`\n"
+                f"💺 **Seat Number : **\n`{seat_number}`\n"
+                f"🕒 **Purchase Time (IST) : **\n`{purchase_time}`\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             )
             embed.add_field(name=f"**Ticket #{ticket_number}**", value=ticket_info, inline=False)
@@ -662,57 +737,113 @@ async def show_table_command(ctx):
 
 
 #CANCEL CMD
-
 @bot.command(name='cancel')
 async def cancel_command(ctx):
+    """Cancels Tickets."""
     try:
         # Embed with "Cancel Ticket" button
         embed = discord.Embed(
             title="🎫 Cancel Flight Ticket",
-            description="Click the button below to enter your ticket number and name for cancellation.",
+            description="Click the button below to enter your details for ticket cancellation.",
             color=discord.Color.red()
         )
         view = discord.ui.View(timeout=180)  # 3-minute timeout for the view
         cancel_button = discord.ui.Button(label="Cancel Ticket", style=discord.ButtonStyle.danger)
 
         async def cancel_ticket_callback(interaction: discord.Interaction):
-            # Modal for entering the ticket number and passenger name
+            # Modal for entering flight number, ticket number, seat number, and passenger name
             class CancelTicketModal(discord.ui.Modal):
                 def __init__(self):
                     super().__init__(title="Cancel Ticket")
-                    self.ticket_number = discord.ui.TextInput(label="Ticket Number", style=discord.TextStyle.short)
-                    self.passenger_name = discord.ui.TextInput(label="Passenger Name", style=discord.TextStyle.short)
+                    self.flight_number = discord.ui.TextInput(
+                        label="Flight Number",
+                        style=discord.TextStyle.short,
+                        placeholder="Enter your flight number (e.g., AA123)"
+                    )
+                    self.ticket_number = discord.ui.TextInput(
+                        label="Ticket Number",
+                        style=discord.TextStyle.short,
+                        placeholder="Enter your ticket number (e.g., 456789)"
+                    )
+                    self.seat_number = discord.ui.TextInput(
+                        label="Seat Number",
+                        style=discord.TextStyle.short,
+                        placeholder="Enter your seat number (e.g., 12A)"
+                    )
+                    self.passenger_name = discord.ui.TextInput(
+                        label="Passenger Name",
+                        style=discord.TextStyle.short,
+                        placeholder="Enter your full name"
+                    )
+                    self.add_item(self.flight_number)
                     self.add_item(self.ticket_number)
+                    self.add_item(self.seat_number)
                     self.add_item(self.passenger_name)
 
                 async def on_submit(self, interaction: discord.Interaction):
-                    # Retrieve ticket number and passenger name from the modal
+                    # Retrieve details from the modal
+                    flight_number = self.flight_number.value
                     ticket_number = self.ticket_number.value
+                    seat_number = self.seat_number.value
                     passenger_name = self.passenger_name.value
 
                     try:
-                        # Update the query to use the correct column name for the passenger's name
+                        # Query to verify all details in the database
                         cursor.execute(
-                            "SELECT * FROM tickets WHERE ticket_number = %s AND LOWER(passenger_name) = LOWER(%s)",
-                            (ticket_number, passenger_name)
+                            """
+                            SELECT arrival_date, purchase_time 
+                            FROM tickets 
+                            WHERE flight_number = %s 
+                            AND ticket_number = %s 
+                            AND seat_number = %s 
+                            AND LOWER(passenger_name) = LOWER(%s)
+                            """,
+                            (flight_number, ticket_number, seat_number, passenger_name)
                         )
                         result = cursor.fetchone()
 
                         if result:
-                            # Delete the matching ticket record
+                            # Extract arrival date and purchase time
+                            arrival_date_db, purchase_time_str = result
+
+                            # Combine arrival date with time (if the time is needed and available)
+                            arrival_date = datetime.combine(arrival_date_db, time(23, 59))  # assuming arrival is end of the day if time is not specified
+                            
+                            # Make arrival_date timezone-aware in IST
+                            ist_timezone = pytz.timezone("Asia/Kolkata")
+                            arrival_date = ist_timezone.localize(arrival_date)
+
+                            # Get current time in IST
+                            current_time = datetime.now(ist_timezone)
+
+                            # Calculate time difference
+                            time_difference = arrival_date - current_time
+                            refund_message = ""
+                            refund_embed_color = discord.Color.green()  # Default to green for refundable
+
+                            if time_difference < timedelta(hours=8):
+                                # If cancellation is within 8 hours of arrival date
+                                refund_message = "⛔ **No Refund Available**\nYou are cancelling your ticket within 8 hours of arrival. Therefore, **no refund** will be issued."
+                                refund_embed_color = discord.Color.red()
+                            else:
+                                # If cancellation is before the 8-hour window
+                                refund_message = "💸 **Refund Available**\nYou are cancelling your ticket with more than 8 hours remaining until arrival. Your **refund will be processed** shortly."
+
+                            # Delete the matching ticket record if all details are correct
                             cursor.execute("DELETE FROM tickets WHERE ticket_number = %s", (ticket_number,))
                             db.commit()
 
-                            # Confirmation message if the ticket was deleted
+                            # Confirmation message
                             confirmation_embed = discord.Embed(
                                 title="✅ Ticket Cancelled Successfully!",
                                 description=(
                                     f"🎟️ **Ticket Number**: `{ticket_number}`\n"
+                                    f"✈️ **Flight Number**: `{flight_number}`\n"
+                                    f"🪑 **Seat Number**: `{seat_number}`\n"
                                     f"👤 **Passenger Name**: `{passenger_name}`\n\n"
-                                    "Your ticket has been successfully cancelled. "
-                                    "If you need further assistance, please contact support."
+                                    f"{refund_message}"
                                 ),
-                                color=discord.Color.green()
+                                color=refund_embed_color
                             )
                             confirmation_embed.set_footer(text="Thank you for choosing our service!")
                             await interaction.response.send_message(embed=confirmation_embed)
@@ -720,7 +851,7 @@ async def cancel_command(ctx):
                             # Error message if no matching ticket was found
                             error_embed = discord.Embed(
                                 title="❌ Ticket Not Found",
-                                description="No ticket found with the provided number and name. Please try again.",
+                                description="No ticket found with the provided details. Please check and try again.",
                                 color=discord.Color.red()
                             )
                             await interaction.response.send_message(embed=error_embed)
@@ -733,7 +864,7 @@ async def cancel_command(ctx):
                         )
                         await interaction.response.send_message(embed=error_embed)
 
-            # Show the modal to enter the ticket number and passenger name
+            # Show the modal to enter the details
             await interaction.response.send_modal(CancelTicketModal())
 
         # Attach the callback to the button
@@ -748,7 +879,6 @@ async def cancel_command(ctx):
         # Error handling if the command fails to execute
         print(f"Error in cancel_command: {e}")
         await ctx.send("⚠️ An error occurred while processing the cancel request. Please try again later.")
-
 #LOOKUP CMD
 # Lookup Modal for gathering ticket information
 class LookupModal(Modal):
@@ -768,52 +898,76 @@ class LookupModal(Modal):
         ticket_number = self.ticket_number.value
         name = self.name.value
 
-        try:
-            # Query the database to check if the ticket and name match
-            query = "SELECT * FROM tickets WHERE ticket_number = %s AND passenger_name = %s"
-            cursor.execute(query, (ticket_number, name))
-            result = cursor.fetchone()  # fetch one matching row or None if not found
-        except mysql.connector.errors.Error as e:
-            await interaction.response.send_message(
-                f"⚠️ Error querying the database: {e}", ephemeral=True
-            )
-            return
+        # Check if 'name' is indeed a column; adjust the query accordingly.
+        # Ensure this query aligns with your actual table schema.
+        query = """
+        SELECT ticket_number, passenger_name, age, passport_number, departure_country, 
+               destination_country, flight_type, price, arrival_date, flight_number, 
+               seat_number
+        FROM tickets WHERE ticket_number = %s AND passenger_name = %s
+        """
 
-        if result:
-            # If match found, format and display ticket details in an embed
-            embed = discord.Embed(title="🎟️ Ticket Details", color=discord.Color.green())
-            embed.add_field(name="🎫 Ticket Number", value=result[0], inline=True)
-            embed.add_field(name="👤 Name", value=result[1], inline=True)
-            embed.add_field(name="📄 Issue", value=result[2], inline=False)
-            embed.add_field(name="🟢 Status", value=result[3], inline=False)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-        else:
-            # If no match found, send an error message
+        try:
+            cursor.execute(query, (ticket_number, name))
+            result = cursor.fetchone()
+
+            if result:
+                # Unpack the result for readability
+                (ticket_number, passenger_name, age, passport_number, departure_country, 
+                 destination_country, flight_type, price, arrival_date, flight_number, 
+                 seat_number) = result
+
+                # Format ticket details in an embed
+                embed = discord.Embed(
+                    title="🎟️ Ticket Details",
+                    description="Here are the details of your ticket:",
+                    color=discord.Color.green()
+                )
+                embed.add_field(name="👤 Passenger Name", value=passenger_name, inline=False)
+                embed.add_field(name="📅 Age", value=str(age), inline=False)
+                embed.add_field(name="🛂 Passport Number", value=passport_number, inline=False)
+                embed.add_field(name="🛫 Departure", value=departure_country, inline=True)
+                embed.add_field(name="🛬 Destination", value=destination_country, inline=True)
+                embed.add_field(name="💺 Flight Type", value=flight_type.upper(), inline=False)
+                embed.add_field(name="💵 Price", value=f"${price:.2f}", inline=False)
+                embed.add_field(name="🎟️ Ticket Number", value=ticket_number, inline=False)
+                embed.add_field(name="📅 Arrival Date", value=arrival_date.strftime('%Y-%m-%d'), inline=False)
+                embed.add_field(name="✈️ Flight Number", value=flight_number, inline=False)
+                embed.add_field(name="🪑 Seat Number", value=seat_number, inline=False)
+
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                # If no match found, send an error message
+                await interaction.response.send_message(
+                    "⚠️ No matching ticket found. Please ensure your ticket number and name are correct.",
+                    ephemeral=True
+                )
+
+        except mysql.connector.Error as err:
             await interaction.response.send_message(
-                "⚠️ No matching ticket found. Please ensure your ticket number and name are correct.",
+                f"⚠️ Database error: {err}",
                 ephemeral=True
             )
 
-# Command to open the lookup button
-@bot.command(name="lookup")
-async def lookup(ctx):
-    embed = discord.Embed(
-        title="Ticket Lookup",
-        description="Click the button below to enter your ticket information.",
-        color=discord.Color.blue()
-    )
-    view = View()
-    lookup_button = Button(label="Enter Ticket Info", style=discord.ButtonStyle.primary)
+# View with a button that triggers the modal
+class LookupView(View):
+    def __init__(self):
+        super().__init__()
 
-    async def button_callback(interaction: discord.Interaction):
-        # Show the lookup modal when the button is clicked
+    @discord.ui.button(label="👀 Lookup Ticket", style=discord.ButtonStyle.primary)
+    async def open_lookup_modal(self, interaction: discord.Interaction, button: Button):
+        # Show the LookupModal when the button is clicked
         await interaction.response.send_modal(LookupModal())
 
-    lookup_button.callback = button_callback
-    view.add_item(lookup_button)
+# Command to initiate the lookup process with a single button
+@bot.command(name="lookup")
+async def lookup(ctx):
+    """Command to initiate the lookup process with a button."""
+    # Send a message with the button
+    view = LookupView()
+    await ctx.send("⬇️ Click the button below to lookup your ticket:", view=view)
 
-    await ctx.send(embed=embed, view=view)
-# SQL CMD
+#SQL CMD
 # Helper function to format results from the "tickets" table
 def format_tickets_embed(headers, rows):
     embed = discord.Embed(
@@ -943,6 +1097,7 @@ async def calc(ctx, operation: str, num1: float, num2: float):
 #nsfw cmd
 @bot.command(name='nig')
 async def joker_gif(ctx):
+    """NSFW joke."""
     await ctx.send(f"I like sri ram and v hemanth oiled up")
     embed = discord.Embed(title="💦")
     # Replace the URL with a direct link to a GIF. You might need to use an actual GIF link here.
@@ -951,6 +1106,7 @@ async def joker_gif(ctx):
 #self boasting cmd
 @bot.command(name='hob')
 async def joker_gif(ctx):
+    """Self boasting."""
     await ctx.send(f"""Well, let me tell ya ’bout hobt0, one of the finest moderators you’ll find ridin' the virtual plains over on Zeqa Minecraft. This here feller knows them server rules better than a cowboy knows his trusty steed. Folks around the server got a deep respect for hobt0, not just ‘cause they keep order like a true sheriff, but ‘cause they’re fair as a prairie sunrise, always lookin’ out for everyone from the greenest newcomer to the most seasoned players.
 
 Hobt0's got a knack for defusin’ trouble faster than a rattlesnake strikes, and if there’s an issue brewin’ in the chat or on the fields, they’re the first to saddle up and ride to set things right. Ain’t just about keepin' folks in line, neither—hobt0's as friendly and helpful as a good neighbor, makin' sure everyone feels welcome and knows where to start if they're lost.
@@ -1000,13 +1156,207 @@ async def about_command(ctx):
         "• **Admin-Only Access:** Restricted to specified admins. 🔒\n"
         "• **Status & Credits:** Shows bot status and creator credits. 🎨"
     ), inline=False)
-    embed.add_field(name="👨‍💻 Built By", value="Bala Aditya", inline=False)
+    embed.add_field(name="👨‍💻 Built By", value="Bala Aditya and Sri Ram", inline=False)
     embed.set_footer(text="Type !helpme to see available commands!")
 
     await ctx.send(embed=embed)
+#ticket delete
+
+
+class DeleteTicketModal(ui.Modal):
+    def __init__(self):
+        super().__init__(title="🗑️ Delete Ticket(s)")
+
+        # Define the modal's input field
+        self.channel_ids = ui.TextInput(
+            label="📝 Enter Channel IDs",
+            placeholder="Enter channel IDs separated by commas",
+            style=discord.TextStyle.short,
+            required=True,
+            max_length=500,
+        )
+        self.add_item(self.channel_ids)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Split the channel IDs by commas and strip whitespace
+        channel_ids = self.channel_ids.value.split(',')
+        failed_deletions = []
+        success_count = 0
+
+        for channel_id in channel_ids:
+            channel_id = channel_id.strip()  # Remove any surrounding whitespace
+            try:
+                # Attempt to fetch and delete each channel
+                channel = await bot.fetch_channel(int(channel_id))
+                await channel.delete()
+                success_count += 1
+            except Exception as e:
+                failed_deletions.append(channel_id)
+
+        # Create a summary embed for the deletions
+        embed = discord.Embed(
+            title="🗑️ Ticket Deletion Summary",
+            color=discord.Color.red()
+        )
+
+        if success_count > 0:
+            embed.add_field(
+                name="✅ Successful Deletions",
+                value=f"{success_count} channel(s) deleted successfully! 🎉",
+                inline=False
+            )
+
+        if failed_deletions:
+            embed.add_field(
+                name="⚠️ Failed Deletions",
+                value=f"Couldn't delete the following channels: {', '.join(failed_deletions)}. ❌",
+                inline=False
+            )
+
+        await interaction.response.send_message(embed=embed)
+
+# Command to open the modal for the user
+@bot.command()
+async def del_ticket(ctx):
+    """Opens a modal for users to input channel IDs to delete."""
+    # Create an embed to confirm the modal was opened
+    embed = discord.Embed(
+        title="🗑️ Ticket Deletion",
+        description="Please enter the channel IDs you want to delete, separated by commas.",
+        color=discord.Color.blue()
+    )
+    embed.set_footer(text="Be careful, this action is irreversible! 🔥")
+
+    await ctx.send(embed=embed)
+    await ctx.send_modal(DeleteTicketModal())
+
+# About command
+@bot.tree.command(name="about", description="Learn more about this bot and its creator.")
+async def about(interaction: discord.Interaction):
+    # Create an embed for the about information
+    embed = discord.Embed(
+        title="🤖 About This Bot",
+        description="This bot is designed to make your experience smoother and more enjoyable! It features a variety of commands to assist you.",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="👤 Creator", value="Bala Aditya", inline=True)
+    embed.add_field(name="🔧 Purpose", value="To automate tasks and provide helpful information.", inline=False)
+    embed.set_footer(text="Thank you for using the bot!")
+
+    # Send the embed in response to the slash command
+    await interaction.response.send_message(embed=embed, ephemeral=True)  # Only visible to the user who used the command
+
+
+
+# Create the /developerbadge slash command
+@bot.event
+async def on_ready():
+    # Sync the commands with Discord
+    await bot.tree.sync()
+    print(f'We have logged in as {bot.user}')
+
+@bot.tree.command(name="developerbadge", description="Get information about the Discord Developer Badge")
+async def developerbadge(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="Discord Developer Badge",
+        description=(
+            "The Discord Developer Badge is awarded to developers who own a verified Discord bot. "
+            "To earn the badge, developers must have created a bot that has been verified by Discord."
+        ),
+        color=discord.Color.blue()  # Discord's primary color
+    )
+    embed.set_footer(text="Learn more at https://support.discord.com")
+
+    await interaction.response.send_message(embed=embed)
+
+
+
+# RPC and Sync commands on bot ready event
+
+@bot.event
+async def on_ready():
+    # Set Rich Presence status with emojis and formatted text
+    activity = discord.Activity(
+        type=discord.ActivityType.listening,
+        name="commands 🎧 | Type !help to get started 💡",
+    )
+    await bot.change_presence(activity=activity)
+    print(f"{bot.user} is online and ready! | Built by aditya._0 💻")
+
+    #sync commands 
+
+    await bot.tree.sync()
+    print("Bot is ready and slash commands are synced.")
+
+#LISTCMD 
+# Command to list all available commands
+@bot.command(name="listcmds")
+async def list_commands(ctx):
+    """Lists all the commands."""
+    list_embed = discord.Embed(
+        title="📜 List of Commands",
+        description="Here are all the available commands:",
+        color=discord.Color.purple()
+    )
     
+    # Loop through all commands in the bot and add them to the embed
+    for command in bot.commands:
+        list_embed.add_field(
+            name=f"🔹 **!{command.name}**",
+            value=command.help if command.help else "No description available",
+            inline=False
+        )
+    
+    list_embed.set_footer(text="⚙️ Built by aditya._0 | Use !help <command> for more info on each command.")
+    await ctx.send(embed=list_embed)
+
+#STATUS CMD
+# The target channel ID where the message will be sent
+TARGET_CHANNEL_ID = <channel_id>
+
+# Define the modal for title and body input
+class StatusModal(discord.ui.Modal, title="Status :"):
+    # Define the TextInput fields for title and body
+    title = discord.ui.TextInput(label="Enter Title", placeholder="Enter your title here", max_length=100)
+    body = discord.ui.TextInput(label="Enter Body", style=discord.TextStyle.paragraph, placeholder="Enter your message body here", max_length=2000)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Access the title and body directly, no need for .value
+        title = self.title
+        body = self.body
+
+        # Create the embed with the provided title and body
+        embed = discord.Embed(
+            title=title,  # Title from the input field
+            description=body,  # Body from the input field
+            color=discord.Color.blurple()  # Embed color
+        )
+
+        # Add an emoji to the footer for some flair
+        embed.set_footer(text="Status created by bot 🤖", icon_url="https://cdn.discordapp.com/embed/avatars/0.png")
+
+        # Send the embed to the target channel
+        target_channel = interaction.guild.get_channel(TARGET_CHANNEL_ID)
+        await target_channel.send(embed=embed)
+
+        # Confirm the submission to the user
+        await interaction.response.send_message(f"Your status **'{title}'** has been posted successfully in the channel!", ephemeral=True)
+
+# Define the button view to trigger the modal
+class StatusButton(discord.ui.View):
+    @discord.ui.button(label="Create Status 📄", style=discord.ButtonStyle.primary)
+    async def create_status(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Show the modal when the button is clicked
+        await interaction.response.send_modal(StatusModal())
+
+# Command to send the initial message with the button
+@bot.command(name="status")
+async def status(ctx):
+    """Status command."""
+    view = StatusButton()  # Create an instance of the button view
+    await ctx.send("Click the button below to create a status message 📝:", view=view)
 # Run the bot
-bot_token = 'BOT TOKEN'
+bot_token = 'BOT_TOKEN'
 if bot_token:
     bot.run(bot_token)
 else:
