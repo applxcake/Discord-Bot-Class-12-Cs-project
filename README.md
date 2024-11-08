@@ -96,31 +96,6 @@ To run this bot locally, follow these steps:
 
 ---
 
-## 🤝 Contributing
-
-We welcome contributions from the community to enhance this project!
-
-1. Fork the repository and create your branch:
-   ```bash
-   git checkout -b feature/AmazingFeature
-   ```
-
-2. Commit your changes:
-   ```bash
-   git commit -m 'Add some AmazingFeature'
-   ```
-
-3. Push to the branch:
-   ```bash
-   git push origin feature/AmazingFeature
-   ```
-
-4. Open a pull request.
-
-Please read our Code of Conduct before contributing.
-
----
-
 ## ⚠️ Disclaimer
 
 This bot is strictly for educational purposes and should be used solely as a CS project or fun Discord bot. It is not a real booking service and does not guarantee any real-life ticket reservations or support. All interactions and data are simulated.
