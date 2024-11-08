@@ -70,11 +70,10 @@ To run this bot locally, follow these steps:
    );
 
    CREATE TABLE flight (
-       id INT AUTO_INCREMENT PRIMARY KEY,
        place VARCHAR(255) NOT NULL,
        flight_number VARCHAR(50) NOT NULL,
        delay VARCHAR(50),
-       terminal VARCHAR(50)
+       terminal VARCHAR(50) PRIMARY KEY
    );
    ```
 
