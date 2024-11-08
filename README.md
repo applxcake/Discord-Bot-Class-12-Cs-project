@@ -1,5 +1,3 @@
-
-(Old - New Table named "flight" is required)
 Here’s the updated README for your Discord bot project using MySQL instead of SQLite. You can save it as README.md.
 
 # ✈️ Flight Ticket Booking Discord Bot
@@ -52,47 +50,49 @@ To run this bot locally, follow these steps:
    ```bash
    git clone https://github.com/your-repo/flight-booking-bot.git
    cd flight-booking-bot
+   ```
 
-2. Install dependencies:
+2. **Install dependencies**:
+   ```bash
+   pip install discord.py mysql-connector-python
+   ```
 
-pip install discord.py mysql-connector-python
+3. **Setup MySQL Database**:
+   - Install MySQL on your system if you haven't already.
+   - Create a database called `flight_booking` and add the following tables for bookings and flights:
 
+   ```sql
+   CREATE TABLE tickets (
+       id INT AUTO_INCREMENT PRIMARY KEY,
+       user_id VARCHAR(255) NOT NULL,
+       flight_number VARCHAR(50) NOT NULL,
+       status VARCHAR(50) NOT NULL
+   );
 
-3. Setup MySQL Database:
+   CREATE TABLE flight (
+       id INT AUTO_INCREMENT PRIMARY KEY,
+       place VARCHAR(255) NOT NULL,
+       flight_number VARCHAR(50) NOT NULL,
+       delay VARCHAR(50),
+       terminal VARCHAR(50)
+   );
+   ```
 
-Install MySQL on your system if you haven't already.
+4. **Configure Database Connection**:
+   - Update your database connection details in the code where the MySQL connection is established.
 
-Create a database called flight_booking and a table for bookings with the necessary fields. Here’s an example SQL command to create a basic table:
+5. **Run the bot**:
+   ```bash
+   python bot.py
+   ```
 
-CREATE TABLE tickets (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id VARCHAR(255) NOT NULL,
-    flight_number VARCHAR(50) NOT NULL,
-    status VARCHAR(50) NOT NULL
-);
-
-
-
-4. Configure Database Connection: Update your database connection details in the code where MySQL connection is established.
-
-
-5. Run the bot:
-
-python bot.py
-
-
-
-> Ensure you have a Discord bot set up and have its token ready to insert in the code. You can create a bot at the Discord Developer Portal.
+> Ensure you have a Discord bot set up and have its token ready to insert into the code. You can create a bot at the Discord Developer Portal.
 
 ## 🛠️ Tech Stack
 
-Python: Main programming language for bot functionality.
-
-MySQL: Database for storing and managing ticket data.
-
-Discord API: For interaction within the Discord platform.
-
-
+- **Python**: Main programming language for bot functionality.
+- **MySQL**: Database for storing and managing ticket data.
+- **Discord API**: For interaction within the Discord platform.
 
 ---
 
@@ -100,21 +100,24 @@ Discord API: For interaction within the Discord platform.
 
 We welcome contributions from the community to enhance this project!
 
-1. Fork the repository and create your branch: git checkout -b feature/AmazingFeature
+1. Fork the repository and create your branch:
+   ```bash
+   git checkout -b feature/AmazingFeature
+   ```
 
+2. Commit your changes:
+   ```bash
+   git commit -m 'Add some AmazingFeature'
+   ```
 
-2. Commit your changes: git commit -m 'Add some AmazingFeature'
+3. Push to the branch:
+   ```bash
+   git push origin feature/AmazingFeature
+   ```
 
-
-3. Push to the branch: git push origin feature/AmazingFeature
-
-
-4. Open a pull request
-
-
+4. Open a pull request.
 
 Please read our Code of Conduct before contributing.
-
 
 ---
 
@@ -122,13 +125,11 @@ Please read our Code of Conduct before contributing.
 
 This bot is strictly for educational purposes and should be used solely as a CS project or fun Discord bot. It is not a real booking service and does not guarantee any real-life ticket reservations or support. All interactions and data are simulated.
 
-
 ---
 
 ## 📝 License
 
 This project is licensed under the MIT License. For more details, see the LICENSE file.
-
 
 ---
 
@@ -136,10 +137,6 @@ This project is licensed under the MIT License. For more details, see the LICENS
 
 We have adopted a Code of Conduct for this project. All contributors are expected to uphold this code to create a welcoming and inclusive environment.
 
-
 ---
 
-# > Built by Bala Aditya 
-
-
-
+# Built by Bala Aditya, Sri Ram Charan and V Hemanth.
