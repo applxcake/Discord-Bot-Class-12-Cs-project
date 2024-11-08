@@ -1,3 +1,5 @@
+(Old - New Table named "flight" is required)
+
 Here’s the updated README for your Discord bot project using MySQL instead of SQLite. You can save it as README.md.
 
 # ✈️ Flight Ticket Booking Discord Bot
