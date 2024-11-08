@@ -63,11 +63,11 @@ db.commit()
 
 # Channel IDs for different categories
 channel_ids = {
-    "ticket_purchasing": <id>,
-    "inquiry": <id>,
-    "support": <id>,
-    "cancel": <id>,
-    "show_table": <id>,
+    "ticket_purchasing": <Channel_ID>,
+    "inquiry": <Channel_ID>,
+    "support": <Channel_ID>,
+    "cancel": <Channel_ID>,
+    "show_table": <Channel_ID>,
 }
 
 # Counter for ticket numbering
@@ -1144,6 +1144,7 @@ async def purge(ctx, number: int):
 #about cmd
 @bot.command(name="about")
 async def about_command(ctx):
+    """About the bot and developer."""
     # Creating an embed for the bot information
     embed = discord.Embed(
         title="📢 About SQL Discord Bot",
@@ -1160,8 +1161,9 @@ async def about_command(ctx):
     embed.set_footer(text="Type !helpme to see available commands!")
 
     await ctx.send(embed=embed)
-#ticket delete
 
+
+#ticket delete
 
 class DeleteTicketModal(ui.Modal):
     def __init__(self):
@@ -1190,7 +1192,7 @@ class DeleteTicketModal(ui.Modal):
                 channel = await bot.fetch_channel(int(channel_id))
                 await channel.delete()
                 success_count += 1
-            except Exception as e:
+            except Exception:
                 failed_deletions.append(channel_id)
 
         # Create a summary embed for the deletions
@@ -1213,26 +1215,39 @@ class DeleteTicketModal(ui.Modal):
                 inline=False
             )
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# Command to open the modal for the user
+class DeleteTicketView(ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(DeleteButton())
+
+class DeleteButton(ui.Button):
+    def __init__(self):
+        super().__init__(label="🗑️ Delete Tickets", style=discord.ButtonStyle.danger)
+
+    async def callback(self, interaction: discord.Interaction):
+        # Display the modal when the button is clicked
+        await interaction.response.send_modal(DeleteTicketModal())
+
+# Command to open the delete ticket embed with a button
 @bot.command()
 async def del_ticket(ctx):
-    """Opens a modal for users to input channel IDs to delete."""
-    # Create an embed to confirm the modal was opened
+    """Sends an embed with a button to open the delete ticket modal."""
+    # Create an embed to confirm the action
     embed = discord.Embed(
         title="🗑️ Ticket Deletion",
-        description="Please enter the channel IDs you want to delete, separated by commas.",
+        description="Press the button below and enter the channel IDs you want to delete, separated by commas.",
         color=discord.Color.blue()
     )
     embed.set_footer(text="Be careful, this action is irreversible! 🔥")
 
-    await ctx.send(embed=embed)
-    await ctx.send_modal(DeleteTicketModal())
-
+    # Send the embed with the delete button
+    await ctx.send(embed=embed, view=DeleteTicketView())
 # About command
 @bot.tree.command(name="about", description="Learn more about this bot and its creator.")
 async def about(interaction: discord.Interaction):
+  
     # Create an embed for the about information
     embed = discord.Embed(
         title="🤖 About This Bot",
@@ -1312,7 +1327,7 @@ async def list_commands(ctx):
 
 #STATUS CMD
 # The target channel ID where the message will be sent
-TARGET_CHANNEL_ID = <channel_id>
+TARGET_CHANNEL_ID = <Channel_ID>
 
 # Define the modal for title and body input
 class StatusModal(discord.ui.Modal, title="Status :"):
@@ -1355,8 +1370,45 @@ async def status(ctx):
     """Status command."""
     view = StatusButton()  # Create an instance of the button view
     await ctx.send("Click the button below to create a status message 📝:", view=view)
+    
+    
+#GAY METER
+
+# In-memory dictionary to store user "gayness" levels
+gayness_levels = {}
+
+# Keywords that affect "gayness" levels
+increase_keywords = ["fabulous", "yass", "queen", "slay", "work it"]
+decrease_keywords = ["bro", "dude", "straight", "no homo"]
+
+
+@bot.command()
+async def gay(ctx, member: discord.Member = None):
+    """Rates gayness👅."""
+    if member is None:
+        member = ctx.author  # Use the command invoker if no member is mentioned
+
+    # Get or initialize gayness level
+    gayness = gayness_levels.get(member.id, random.randint(0, 100))
+    gayness_levels[member.id] = gayness  # Store it if new
+
+    # Create an embed with the gayness level
+    embed = discord.Embed(
+        title="🌈💋 Gayness Detector 💋🌈",
+        description=f"{member.mention}'s gayness level is:",
+        color=discord.Color.purple()
+    )
+    embed.add_field(name="Gayness Level", value=f"👅💖 **{gayness}%** 💖👅", inline=False)
+    embed.set_footer(text="Just having some fun! 😜")
+    
+    # Send the embedded message
+    await ctx.send(embed=embed)
+
+
+
+
 # Run the bot
-bot_token = 'BOT_TOKEN'
+bot_token = 'BOT_TOKEN_HERE'
 if bot_token:
     bot.run(bot_token)
 else:
