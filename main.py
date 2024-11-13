@@ -1,6 +1,6 @@
 import discord
 import mysql.connector
-from discord.ext import commands
+from discord.ext import commands, tasks
 import random
 import string
 import os
@@ -20,9 +20,9 @@ geolocator = Nominatim(user_agent="flight_bot")
 
 # MySQL database connection setup
 db_config = {
-    'host': 'HOST',
-    'port': 'PORT',
-    'user': 'USER_NAME',
+    'host': 'HOST_NAME',
+    'port': 'port',
+    'user': 'USR_NAME',
     'password': 'PSWD',
     'database': 'DB_NAME'
 }
@@ -60,11 +60,11 @@ db.commit()
 
 # Channel IDs for different categories
 channel_ids = {
-    "ticket_purchasing": "channel_id",
-    "inquiry": "channel_id",
-    "support": "channel_id",
-    "cancel": "channel_id",
-    "show_table": "channel_id",
+    "ticket_purchasing": <channel_id>,
+    "inquiry": <channel_id>,
+    "support": <channel_id>,
+    "cancel": <channel_id>,
+    "show_table": <channel_id>,
 }
 
 # Counter for ticket numbering
@@ -1340,7 +1340,7 @@ async def list_commands(ctx):
 
 #STATUS CMD
 # The target channel ID where the message will be sent
-TARGET_CHANNEL_ID = "channel_id"
+TARGET_CHANNEL_ID = <channel_id>
 
 # Define the modal for title and body input
 class StatusModal(discord.ui.Modal, title="Status :"):
@@ -1457,6 +1457,159 @@ async def show_flight_table(ctx):
         print(f"Error connecting to the database: {err}")
         await ctx.send("There was an error fetching flight data. Please try again later.")
 
+#LOG CMD
+LOG_CHANNEL_ID = <channel_id>  # Channel ID where logs will be sent
+log_active = False  # Variable to track if logging is active
+end_logging_time = None  # Variable to store the end time for logging
+
+@bot.command(name="log")
+async def start_logging(ctx):
+    """Starts the logging process with a modal to input the duration."""
+
+    embed = discord.Embed(
+        title="📝 Logging Setup",
+        description="Click the button below to enter the logging duration.",
+        color=discord.Color.blue()
+    )
+    view = discord.ui.View(timeout=None)
+    duration_button = discord.ui.Button(label="Enter Duration (mins)", style=discord.ButtonStyle.primary)
+
+    async def duration_button_callback(interaction: discord.Interaction):
+        
+        class DurationModal(discord.ui.Modal, title="Enter Logging Duration"):
+            duration = discord.ui.TextInput(label="⏳ Duration (in minutes)", placeholder="Enter a number of minutes")
+
+            async def on_submit(self, interaction: discord.Interaction):
+                global log_active, end_logging_time
+
+                try:
+                    duration_minutes = int(self.duration.value)
+                    if duration_minutes <= 0:
+                        await interaction.response.send_message("⚠️ Please enter a positive number.", ephemeral=True)
+                        return
+
+                    # Set the logging state and end time
+                    log_active = True
+                    end_logging_time = datetime.utcnow() + timedelta(minutes=duration_minutes)
+                    await interaction.response.send_message(f"📝 Logging started for {duration_minutes} minutes!", ephemeral=True)
+                    bot.loop.create_task(stop_logging_after_duration())
+
+                except ValueError:
+                    await interaction.response.send_message("⚠️ Please enter a valid integer.", ephemeral=True)
+
+        await interaction.response.send_modal(DurationModal())
+
+    duration_button.callback = duration_button_callback
+    view.add_item(duration_button)
+    await ctx.send(embed=embed, view=view)
+
+async def stop_logging_after_duration():
+    """Stops logging after the specified duration."""
+    global log_active, end_logging_time
+
+    while datetime.utcnow() < end_logging_time:
+        await asyncio.sleep(10)  # Check every 10 seconds to reduce unnecessary resource usage
+
+    log_active = False
+    log_channel = bot.get_channel(LOG_CHANNEL_ID)
+    await log_channel.send("🛑 Logging has ended.")
+
+@bot.event
+async def on_message_edit(before, after):
+    """Logs edited messages."""
+    global log_active
+    if log_active and before.content != after.content:
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        embed = discord.Embed(
+            title="✏️ Message Edited",
+            color=discord.Color.orange(),
+            timestamp=datetime.utcnow()
+        )
+        embed.add_field(name="User", value=before.author.mention, inline=True)
+        embed.add_field(name="Channel", value=before.channel.mention, inline=True)
+        embed.add_field(name="Before", value=before.content or "N/A", inline=False)
+        embed.add_field(name="After", value=after.content or "N/A", inline=False)
+        await log_channel.send(embed=embed)
+
+@bot.event
+async def on_message_delete(message):
+    """Logs deleted messages."""
+    global log_active
+    if log_active:
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        embed = discord.Embed(
+            title="🗑️ Message Deleted",
+            color=discord.Color.red(),
+            timestamp=datetime.utcnow()
+        )
+        embed.add_field(name="User", value=message.author.mention, inline=True)
+        embed.add_field(name="Channel", value=message.channel.mention, inline=True)
+        embed.add_field(name="Content", value=message.content or "N/A", inline=False)
+        await log_channel.send(embed=embed)
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    """Logs member joins and leaves in voice channels."""
+    global log_active
+    if log_active:
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        
+        if before.channel is None and after.channel is not None:
+            # User joined a voice channel
+            embed = discord.Embed(
+                title="🔊 Voice Channel Join",
+                description=f"{member.mention} joined {after.channel.mention}",
+                color=discord.Color.green(),
+                timestamp=datetime.utcnow()
+            )
+            await log_channel.send(embed=embed)
+
+        elif before.channel is not None and after.channel is None:
+            # User left a voice channel
+            embed = discord.Embed(
+                title="🔇 Voice Channel Leave",
+                description=f"{member.mention} left {before.channel.mention}",
+                color=discord.Color.red(),
+                timestamp=datetime.utcnow()
+            )
+            await log_channel.send(embed=embed)
+
+        elif before.channel != after.channel:
+            # User switched voice channels
+            embed = discord.Embed(
+                title="🔄 Voice Channel Switch",
+                description=f"{member.mention} moved from {before.channel.mention} to {after.channel.mention}",
+                color=discord.Color.blue(),
+                timestamp=datetime.utcnow()
+            )
+            await log_channel.send(embed=embed)
+
+#STOPLOG CMD
+@bot.command(name="stoplog")
+async def stop_logging(ctx):
+    """Stops the logging process manually."""
+
+    global log_active
+    if log_active:
+        log_active = False
+        embed = discord.Embed(
+            title="🛑 Logging Stopped",
+            description="Logging has been stopped manually.",
+            color=discord.Color.red(),
+            timestamp=datetime.utcnow()
+        )
+        await ctx.send(embed=embed)
+
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        await log_channel.send(embed=embed)
+    else:
+        embed = discord.Embed(
+            title="⚠️ Logging Not Active",
+            description="Logging is not currently active.",
+            color=discord.Color.orange(),
+            timestamp=datetime.utcnow()
+        )
+        await ctx.send(embed=embed)
 
 # Run the bot
 bot_token = 'BOT_TOKEN_GOES_HERE'
