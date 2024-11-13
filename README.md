@@ -49,8 +49,8 @@ To run this bot locally, follow these steps:
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/your-repo/flight-booking-bot.git
-   cd flight-booking-bot
+   git clone https://github.com/applxcake/Discord-Python-MYSQL-bot
+   cd Discord-Python-MYSQL-bot
    ```
 
 2. **Install dependencies**:
@@ -63,11 +63,17 @@ To run this bot locally, follow these steps:
    - Create a database called `flight_booking` and add the following tables for bookings and flights:
 
    ```sql
-   CREATE TABLE tickets (
-       id INT AUTO_INCREMENT PRIMARY KEY,
-       user_id VARCHAR(255) NOT NULL,
-       flight_number VARCHAR(50) NOT NULL,
-       status VARCHAR(50) NOT NULL
+    CREATE TABLE IF NOT EXISTS tickets (
+    ticket_number VARCHAR(8) PRIMARY KEY,
+    passenger_name VARCHAR(100),
+    age INT,
+    passport_number VARCHAR(20),
+    departure_country VARCHAR(50),
+    destination_country VARCHAR(50),
+    flight_type VARCHAR(20),
+    price DECIMAL(10, 2),
+    arrival_date DATE,
+    grptno varchar(30)
    );
 
    CREATE TABLE flight (
@@ -83,7 +89,7 @@ To run this bot locally, follow these steps:
 
 5. **Run the bot**:
    ```bash
-   python bot.py
+   python main.py
    ```
 
 > Ensure you have a Discord bot set up and have its token ready to insert into the code. You can create a bot at the Discord Developer Portal.
