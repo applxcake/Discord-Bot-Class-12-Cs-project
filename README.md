@@ -73,7 +73,8 @@ To run this bot locally, follow these steps:
     flight_type VARCHAR(20),
     price DECIMAL(10, 2),
     arrival_date DATE,
-    grptno varchar(30)
+    grptno varchar(30),
+   member_id BIGINT NOT NULL
    );
 
    CREATE TABLE flight (
