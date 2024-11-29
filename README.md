@@ -21,7 +21,7 @@ Welcome to the **Flight Ticket Booking Discord Bot** project! This bot simulates
 
 ## 💡 Introduction
 
-Created by **Bala Adithya** and **Sri Ram Charan**, this project is a **CS project** for learning and showcasing our coding skills. This Discord bot uses **Python** and **MySQL** to create a simulated booking experience where users can:
+Created by **Bala Aditya** and **Sri Ram Charan**, this project is a **CS project** for learning and showcasing our coding skills. This Discord bot uses **Python** and **MySQL** to create a simulated booking experience where users can:
 - Book tickets
 - Lookup flight details
 - Cancel tickets
