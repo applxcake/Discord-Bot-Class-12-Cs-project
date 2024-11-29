@@ -7,6 +7,7 @@ import os
 import asyncio
 import pytz
 import textwrap
+import sys
 from discord.ui import Modal, TextInput, Button, View
 from datetime import datetime, timedelta, time
 from discord import app_commands, ui, Interaction, Embed
@@ -14,18 +15,21 @@ from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 
 # Discord bot setup with necessary intents
+# Define the intents
 intents = discord.Intents.default()
-intents.message_content = True
+intents.messages = True  # Listen for messages
+intents.guilds = True
+intents.message_content = True  # Required for message content (text) monitoring
 bot = commands.Bot(command_prefix="!", intents=intents)
 geolocator = Nominatim(user_agent="flight_bot")
 
 # MySQL database connection setup
 db_config = {
-    'host': 'gateway01.ap-southeast-1.prod.aws.tidbcloud.com',
-    'port': '4000',
-    'user': '3vPW23FtdZeA4rP.root',
-    'password': 'dIaVfyx5NEWUmdmM',
-    'database': 'test'
+    'host': 'HOST',
+    'port': 'PORT',
+    'user': 'USERNAME',
+    'password': 'PSWD',
+    'database': 'DBNANE'
 }
 
 try:
@@ -356,14 +360,6 @@ async def purchase_ticket(ctx):
             ''.join(random.choices(letters, k=2))   # Two letters
         )
 
-    def generate_seat_number():
-        letters = string.ascii_uppercase  # A-Z
-        digits = string.digits  # 0-9
-        return (
-            ''.join(random.choices(letters, k=1)) +  # One letter
-            ''.join(random.choices(digits, k=2))    # Two digits
-        )
-
     async def start_booking_callback(interaction: discord.Interaction):
         class PassengerInfoModal(discord.ui.Modal, title="Passenger Information"):
             names = discord.ui.TextInput(label="👤 Passenger Names", placeholder="Enter your name (eg: Alice, Bob..)")
@@ -394,9 +390,20 @@ async def purchase_ticket(ctx):
                     await interaction.followup.send("⚠️ Please ensure all ages are valid integers.", ephemeral=True)
                     return
 
-                cursor.execute("SELECT flight_number FROM flight WHERE place = %s", (self.departure_country.value.upper(),))
-                flight_results = cursor.fetchall()
-                flight_number = random.choice([result[0] for result in flight_results]).upper() if flight_results else "FL123"
+                cursor.execute(
+                    "SELECT flight_number FROM flight WHERE LOWER(place) = LOWER(%s) LIMIT 1",
+                    (self.departure_country.value,)
+                )
+                flight_results = cursor.fetchone()
+
+                if not flight_results:
+                    await interaction.followup.send(
+                        f"⚠️ No flights found departing from **{self.departure_country.value.upper()}**. Please check the departure location.",
+                        ephemeral=True,
+                    )
+                    return
+
+                flight_number = flight_results[0].upper()  # Retrieve and convert the flight number to uppercase
 
                 try:
                     departure_location = geolocator.geocode(self.departure_country.value)
@@ -404,6 +411,7 @@ async def purchase_ticket(ctx):
                     if not departure_location or not destination_location:
                         await interaction.followup.send("⚠️ Could not locate one of the places. Check country names.", ephemeral=True)
                         return
+
                     distance_km = geodesic(
                         (departure_location.latitude, departure_location.longitude),
                         (destination_location.latitude, destination_location.longitude)
@@ -613,37 +621,45 @@ async def inquiry_command(ctx):
             async def on_submit(self, interaction):
                 flight_num = self.flight_number.value.upper()
 
-                # Retrieve the requested info from the flight table based on the selected option
-                cursor.execute("SELECT delay, terminal FROM flight WHERE flight_number = %s", (flight_num,))
-                result = cursor.fetchone()
+                try:
+                    # Execute the query to fetch flight information
+                    cursor.execute("SELECT delay, terminal FROM flight WHERE flight_number = %s", (flight_num,))
+                    result = cursor.fetchone()
+                    cursor.fetchall()  # Ensure all results are consumed
 
-                if result:
-                    delay, terminal = result
-                    description = ""
-                    if info_type == "delay":
-                        description = "⏱️ Checking delay status..."
+                    if result:
+                        delay, terminal = result
+                        description = ""
+                        if info_type == "delay":
+                            description = f"⏱️ Delay: {delay} minutes"
 
-                    # Create an embed with the requested flight information
-                    response_embed = discord.Embed(
-                        title=f"Flight Information for {flight_num}",
-                        color=discord.Color.blue()
-                    )
-                    response_embed.add_field(name="🛩️ Flight Number", value=flight_num, inline=False)
+                        # Create an embed with the requested flight information
+                        response_embed = discord.Embed(
+                            title=f"Flight Information for {flight_num}",
+                            color=discord.Color.blue()
+                        )
+                        response_embed.add_field(name="🛩️ Flight Number", value=flight_num, inline=False)
 
-                    # Display specific information based on the selected inquiry type
-                    if info_type == "delay":
-                        response_embed.add_field(name="⏱️ Delay", value=f"{delay} minutes", inline=True)
-                    elif info_type == "arrival":
-                        description = "Estimated arrival time may vary due to the delay. Please check with the airline website for real-time updates."
-                        response_embed.add_field(name="🛬 Arrival Info", value=description, inline=True)
-                    elif info_type == "terminal":
-                        response_embed.add_field(name="🏢 Terminal", value=f"Terminal {terminal}", inline=True)
+                        # Display specific information based on the selected inquiry type
+                        if info_type == "delay":
+                            response_embed.add_field(name="⏱️ Delay", value=f"{delay} minutes", inline=True)
+                        elif info_type == "arrival":
+                            description = "Estimated arrival time may vary due to the delay. Please check with the airline website for real-time updates."
+                            response_embed.add_field(name="🛬 Arrival Info", value=description, inline=True)
+                        elif info_type == "terminal":
+                            response_embed.add_field(name="🏢 Terminal", value=f"Terminal {terminal}", inline=True)
 
-                    await interaction.response.send_message(embed=response_embed)
-                else:
-                    # Handle case where the flight number isn't found
+                        await interaction.response.send_message(embed=response_embed)
+                    else:
+                        # Handle case where the flight number isn't found
+                        await interaction.response.send_message(
+                            "❌ No information found for the specified flight number. Please try again with a valid number.",
+                            ephemeral=True
+                        )
+
+                except mysql.connector.Error as err:
                     await interaction.response.send_message(
-                        "❌ No information found for the specified flight number. Please try again with a valid number.",
+                        f"⚠️ An error occurred while retrieving flight information: {err}",
                         ephemeral=True
                     )
 
@@ -660,6 +676,7 @@ async def inquiry_command(ctx):
     view.add_item(terminal_button)
 
     await ctx.send(embed=embed, view=view)
+
 
 #SUPPORT CMD
 @bot.command(name='support')
@@ -688,21 +705,29 @@ async def support_command(ctx):
             async def on_submit(self, interaction):
                 flight_num = self.flight_number.value.upper()
 
-                # Fetch delay info based on flight number
-                cursor.execute("SELECT delay FROM flight WHERE flight_number = %s", (flight_num,))
-                result = cursor.fetchone()
+                try:
+                    # Fetch delay info based on flight number
+                    cursor.execute("SELECT delay FROM flight WHERE flight_number = %s", (flight_num,))
+                    result = cursor.fetchone()
+                    cursor.fetchall()  # Ensure the result set is fully consumed
 
-                if result:
-                    delay = result[0]
-                    response_embed = discord.Embed(
-                        title=f"Luggage Delay Information for Flight {flight_num}",
-                        description=f"⏱️ Estimated delay: **{delay} minutes**",
-                        color=discord.Color.blue()
-                    )
-                    await interaction.response.send_message(embed=response_embed)
-                else:
+                    if result:
+                        delay = result[0]
+                        response_embed = discord.Embed(
+                            title=f"Luggage Delay Information for Flight {flight_num}",
+                            description=f"⏱️ Estimated delay: **{delay} minutes**",
+                            color=discord.Color.blue()
+                        )
+                        await interaction.response.send_message(embed=response_embed)
+                    else:
+                        await interaction.response.send_message(
+                            "❌ No delay information found for the specified flight number. Please try again with a valid number.",
+                            ephemeral=True
+                        )
+
+                except mysql.connector.Error as err:
                     await interaction.response.send_message(
-                        "❌ No delay information found for the specified flight number. Please try again with a valid number.",
+                        f"⚠️ An error occurred while retrieving luggage delay information: {err}",
                         ephemeral=True
                     )
 
@@ -739,28 +764,36 @@ async def support_command(ctx):
                 name = self.passenger_name.value.upper()
                 new_date = self.new_arrival_date.value
 
-                # Check if ticket number and name match in the tickets table
-                cursor.execute("SELECT arrival_date FROM tickets WHERE ticket_number = %s AND passenger_name = %s", 
-                               (ticket_num, name))
-                result = cursor.fetchone()
+                try:
+                    # Check if ticket number and name match in the tickets table
+                    cursor.execute("SELECT arrival_date FROM tickets WHERE ticket_number = %s AND passenger_name = %s", 
+                                   (ticket_num, name))
+                    result = cursor.fetchone()
+                    cursor.fetchall()  # Ensure the result set is fully consumed
 
-                if result:
-                    # Update the arrival date in the database
-                    cursor.execute("UPDATE tickets SET arrival_date = %s WHERE ticket_number = %s AND passenger_name = %s",
-                                   (new_date, ticket_num, name))
-                    db.commit()
+                    if result:
+                        # Update the arrival date in the database
+                        cursor.execute("UPDATE tickets SET arrival_date = %s WHERE ticket_number = %s AND passenger_name = %s",
+                                       (new_date, ticket_num, name))
+                        db.commit()
 
-                    response_embed = discord.Embed(
-                        title="Ticket Postponement Confirmation",
-                        description=f"🎟️ Your arrival date has been updated successfully!",
-                        color=discord.Color.green()
-                    )
-                    response_embed.add_field(name="Ticket Number", value=ticket_num, inline=False)
-                    response_embed.add_field(name="New Arrival Date", value=new_date, inline=False)
-                    await interaction.response.send_message(embed=response_embed)
-                else:
+                        response_embed = discord.Embed(
+                            title="Ticket Postponement Confirmation",
+                            description=f"🎟️ Your arrival date has been updated successfully!",
+                            color=discord.Color.green()
+                        )
+                        response_embed.add_field(name="Ticket Number", value=ticket_num, inline=False)
+                        response_embed.add_field(name="New Arrival Date", value=new_date, inline=False)
+                        await interaction.response.send_message(embed=response_embed)
+                    else:
+                        await interaction.response.send_message(
+                            "❌ Ticket number and name do not match our records. Please try again.",
+                            ephemeral=True
+                        )
+
+                except mysql.connector.Error as err:
                     await interaction.response.send_message(
-                        "❌ Ticket number and name do not match our records. Please try again.",
+                        f"⚠️ An error occurred while processing ticket postponement: {err}",
                         ephemeral=True
                     )
 
@@ -1147,7 +1180,7 @@ def format_query_result_embed(headers, rows):
     return embeds
 
 @bot.command(name="sql")
-@commands.has_role(<role_id>)  # Restrict to the bot owner
+@commands.has_role(1300878206349475860)  # Restrict to the bot owner
 async def sql(ctx, *, query: str):
     """Executes a SQL query and returns the result in a styled embed. Restricted to Admin role."""
 
@@ -1522,13 +1555,18 @@ async def status(ctx):
     
 
 #GAY METER
-# In-memory dictionary to store user "gayness" levels
-gayness_levels = {}
+# Create the gayness_levels table if it doesn't exist
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS gayness_levels (
+    user_id BIGINT PRIMARY KEY,
+    gayness INT
+)
+""")
+db.commit()
 
-# Keywords that affect "gayness" levels
-increase_keywords = ["fabulous", "yass", "queen", "slay", "work it"]
-decrease_keywords = ["bro", "dude", "straight", "no homo"]
-
+# Keywords that affect gayness levels
+increase_keywords = ["fabulous", "yass", "queen", "slay", "work it", "im gay"]
+decrease_keywords = ["bro", "dude", "straight", "no homo", "hobt"]
 
 @bot.command()
 async def gay(ctx, member: discord.Member = None):
@@ -1536,22 +1574,77 @@ async def gay(ctx, member: discord.Member = None):
     if member is None:
         member = ctx.author  # Use the command invoker if no member is mentioned
 
-    # Get or initialize gayness level
-    gayness = gayness_levels.get(member.id, random.randint(0, 100))
-    gayness_levels[member.id] = gayness  # Store it if new
+    # Retrieve or initialize gayness level from the database
+    cursor.execute("SELECT gayness FROM gayness_levels WHERE user_id = %s", (member.id,))
+    result = cursor.fetchone()
 
-    # Create an embed with the gayness level
+    if result is None:
+        gayness = random.randint(0, 100)
+        cursor.execute("INSERT INTO gayness_levels (user_id, gayness) VALUES (%s, %s)", (member.id, gayness))
+        db.commit()
+    else:
+        gayness = result[0]
+
+    # Create the base embed
     embed = discord.Embed(
         title="🌈💋 Gayness Detector 💋🌈",
         description=f"{member.mention}'s gayness level is:",
         color=discord.Color.purple()
     )
     embed.add_field(name="Gayness Level", value=f"👅💖 **{gayness}%** 💖👅", inline=False)
-    embed.set_footer(text="Just having some fun! 😜")
-    
+
+    # Add custom reactions for extreme gayness levels
+    if gayness == 100:
+        embed.add_field(
+            name="Mocking Message",
+            value="🔥🔥 **WOAH!** You're so fabulously gay, you probably glitter in the dark! 🌟✨",
+            inline=False
+        )
+    elif gayness == 0:
+        embed.add_field(
+            name="Praise Message",
+            value="🐺 **ALPHA WOLF!** You're the embodiment of straight dominance. Absolute unit. 💪🦁",
+            inline=False
+        )
+    else:
+        embed.set_footer(text="Just having some fun! 😜")
+
     # Send the embedded message
     await ctx.send(embed=embed)
 
+@bot.event
+async def on_message(message):
+    """Monitor messages for keywords that affect gayness levels."""
+    if message.author.bot:
+        return  # Ignore bot messages
+
+    gayness_change = 0
+    content_lower = message.content.lower()
+
+    # Check for keywords
+    for word in increase_keywords:
+        if word in content_lower:
+            gayness_change += 5  # Increase gayness level by 5 for each keyword
+
+    for word in decrease_keywords:
+        if word in content_lower:
+            gayness_change -= 5  # Decrease gayness level by 5 for each keyword
+
+    # Update gayness level in the database
+    if gayness_change != 0:
+        cursor.execute("SELECT gayness FROM gayness_levels WHERE user_id = %s", (message.author.id,))
+        result = cursor.fetchone()
+
+        if result is None:
+            gayness = random.randint(0, 100) + gayness_change
+            cursor.execute("INSERT INTO gayness_levels (user_id, gayness) VALUES (%s, %s)", (message.author.id, gayness))
+        else:
+            gayness = max(0, min(100, result[0] + gayness_change))  # Ensure gayness stays between 0 and 100
+            cursor.execute("UPDATE gayness_levels SET gayness = %s WHERE user_id = %s", (gayness, message.author.id))
+        db.commit()
+
+    # Process commands after monitoring messages
+    await bot.process_commands(message)
 #showtb_flight CMD
 # Command to show flight table data
 @bot.command(name='showtb_flight')
@@ -1746,6 +1839,93 @@ async def stop_logging(ctx):
             timestamp=datetime.utcnow()
         )
         await ctx.send(embed=embed)
+        
+        
+#Backup command
+OWNER_ID = <user_id>  # Replace with your actual user ID
+
+@bot.command()
+async def backup(ctx):
+    if ctx.author.id != OWNER_ID:
+        embed = discord.Embed(
+            title="⛔ Access Denied",
+            description="**You do not have permission to run this command.**\n🔒 Only the bot owner can use this feature!",
+            color=discord.Color.red(),
+        )
+        await ctx.send(embed=embed)
+        return
+
+    embed = discord.Embed(
+        title="📁 Backup in Progress",
+        description="Starting the backup process... This might take a while depending on the server size.",
+        color=discord.Color.blue(),
+        timestamp=datetime.now(),
+    )
+    embed.set_footer(text="Backup initiated by " + str(ctx.author), icon_url=ctx.author.avatar.url)
+    progress_message = await ctx.send(embed=embed)
+
+    folder_path = "backups"
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    file_path = f"{folder_path}/backup_{ctx.guild.name}_{timestamp}.html"
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(f"<html><head><title>Backup of {ctx.guild.name}</title></head><body>")
+        f.write(f"<h1>📁 Server Backup: {ctx.guild.name}</h1>")
+        f.write(f"<p>🕒 Backup generated on: {timestamp}</p><hr>")
+
+        for channel in ctx.guild.text_channels:
+            try:
+                f.write(f"<h2>📜 #{channel.name}</h2>")
+                f.write("<ul>")
+                async for message in channel.history(limit=None, oldest_first=True):
+                    f.write(
+                        f"<li>🗣️ <strong>{message.author}:</strong> {message.content} "
+                        f"<em>({message.created_at.strftime('%Y-%m-%d %H:%M:%S')})</em></li>"
+                    )
+                f.write("</ul><hr>")
+            except Exception as e:
+                f.write(f"<p>⚠️ Error fetching messages from #{channel.name}: {str(e)}</p><hr>")
+
+        f.write("</body></html>")
+
+    embed.title = "✅ Backup Complete"
+    embed.description = "The server backup has been completed successfully!"
+    embed.color = discord.Color.green()
+    embed.add_field(name="📂 File Info", value=f"**File Name:** `backup_{ctx.guild.name}_{timestamp}.html`", inline=False)
+    embed.add_field(name="📤 Uploading...", value="Sending the backup file to the designated channel.", inline=False)
+    await progress_message.edit(embed=embed)
+
+    backup_channel_id = <channel_id>  # Replace with the desired channel ID
+    backup_channel = bot.get_channel(backup_channel_id)
+
+    if backup_channel:
+        await backup_channel.send(
+            content="🗂️ **Here is the latest backup of the server!**",
+            file=discord.File(file_path),
+        )
+        embed.add_field(name="📥 File Delivered", value=f"The backup has been sent to <#{backup_channel_id}>.", inline=False)
+        await progress_message.edit(embed=embed)
+    else:
+        embed.add_field(name="⚠️ Error", value="Failed to find the backup channel. Please check the channel ID.", inline=False)
+        embed.color = discord.Color.red()
+        await progress_message.edit(embed=embed)
+
+    os.remove(file_path)
+
+#RESTART
+@bot.command(name='restart')
+@commands.has_permissions(administrator=True)  # Restrict to admins only
+async def restart_command(ctx):
+    """Restart the bot."""
+    await ctx.send("🌀 Restarting the bot... Please wait a moment.")
+    
+    # Optionally, log the restart
+    print("Bot is restarting...")
+
+    # Use os to restart the bot
+    os.execv(sys.executable, ['python'] + sys.argv)
 
 # Run the bot
 bot_token = 'BOT_TOKEN_GOES_HERE'
