@@ -1,6 +1,6 @@
 Here’s the updated README for your Discord bot project using MySQL instead of SQLite. You can save it as README.md.
 
-(Discord server for support[be professional]: https://discord.gg/NvMQsu8Xab)
+(OUTDATED AS OF 11 JANUARY, 2024)
 # ✈️ Flight Ticket Booking Discord Bot
 
 Welcome to the **Flight Ticket Booking Discord Bot** project! This bot simulates a flight ticket booking system within Discord, providing users with a fun and interactive experience. **Disclaimer**: This bot is purely for educational and entertainment purposes and is not associated with any real-life booking service.
